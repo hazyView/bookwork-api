@@ -1,334 +1,274 @@
 # Bookwork API
 
-A complete RESTful API for the Bookwork book club management platform, built with Go.
+A robust Go-based API for managing book clubs, built with enterprise-grade PostgreSQL integration, comprehensive monitoring, and production-ready database migrations.
 
-## 🚀 Quick Start Guide
+## 🚀 Features
 
-### Option 1: Docker (Recommended)
-```bash
-# 1. Quick setup with Docker
-./scripts/setup-staging.sh --docker
+### Core Functionality
+- **User Authentication**: JWT-based authentication with refresh tokens
+- **Club Management**: Create, manage, and moderate book clubs
+- **Event Management**: Schedule discussions, meetings, and book-related events
+- **Availability Tracking**: Member availability for events
+- **Member Management**: Role-based access control (admin, moderator, member)
 
-# 2. Test the deployment
-./scripts/integration-test.sh
+### Database Features
+- **PostgreSQL 15+**: Advanced database with UUID primary keys, array support, and full-text search
+- **Automated Migrations**: Embedded filesystem-based migration system with rollback support
+- **Connection Pooling**: Optimized database connections with PgBouncer support
+- **Performance Monitoring**: Built-in database metrics and slow query monitoring
+- **Health Checks**: Comprehensive API and database health monitoring endpoints
+- **Security**: Row-level security, audit logging, and password policies
 
-# 3. Update your SvelteKit .env file
-echo "VITE_API_BASE=http://localhost:8001/api" >> frontend/.env
-```
+### Monitoring & Observability
+- **Health Endpoints**: Real-time API and database health status
+- **Metrics Dashboard**: Database performance, connection stats, and query analysis
+- **Slow Query Detection**: Automatic identification of performance bottlenecks
+- **Lock Monitoring**: Database lock detection and resolution
+- **User Activity Tracking**: Detailed user session and query monitoring
 
-### Option 2: Local Development
-```bash
-# 1. Setup local environment
-./scripts/setup-staging.sh
+## 🏗️ Architecture
 
-# 2. Start the API
-ENV_FILE=.env.staging ./bin/bookwork-api
+### Technology Stack
+- **Backend**: Go 1.21+ with Chi router
+- **Database**: PostgreSQL 15+ with advanced indexing and monitoring
+- **Authentication**: JWT with RS256 signing
+- **Containerization**: Docker with multi-stage builds
+- **Migration System**: Embedded SQL files with version control
 
-# 3. Test in another terminal
-./scripts/integration-test.sh
-```
+### Database Schema
+- **Users**: Authentication and profile management
+- **Clubs**: Book club organization with metadata
+- **Club Members**: Role-based membership with reading statistics
+- **Events**: Scheduled activities with location and book details
+- **Event Items**: Task and material management for events
+- **Availability**: Member scheduling and attendance tracking
 
-## 🔗 Integration with SvelteKit
+## 📋 Prerequisites
 
-Your SvelteKit app should connect to:
-- **API Base URL**: `http://localhost:8001/api`
-- **Health Check**: `http://localhost:8001/healthz`
+- **Go**: 1.21 or higher
+- **PostgreSQL**: 15+ (required for advanced features)
+- **Docker**: For containerized deployment (optional)
+- **Make**: For build automation
 
-### Example Frontend Configuration
+## 🛠️ Installation & Setup
 
-**`.env`:**
-```bash
-VITE_API_BASE=http://localhost:8001/api
-```
-
-**API Service Example:**
-```javascript
-// src/lib/api.js
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001/api';
-
-export async function apiCall(endpoint, options = {}) {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  });
-  
-  return response.json();
-}
-
-// Login example
-export async function login(email, password) {
-  return apiCall('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-}
-```
-
-## 🧪 Testing Your Integration
-
-```bash
-# Run comprehensive integration tests
-./scripts/integration-test.sh
-
-# Test specific API endpoint
-curl http://localhost:8001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@bookwork.com", "password": "admin123"}'
-```
-
-## 📋 Default Credentials
-
-- **Admin**: admin@bookwork.com / admin123
-- **Database**: bookwork_staging (password auto-generated)
-
-## Features
-
-- **Authentication**: JWT-based authentication with refresh tokens
-- **Club Management**: Club member management with role-based permissions
-- **Event Management**: Create, update, and manage club events
-- **Event Coordination**: Item assignment and availability tracking
-- **Security**: Password hashing, input validation, SQL injection protection
-- **Performance**: Database connection pooling, proper indexing
-
-## Getting Started (Manual Setup)
-
-### Prerequisites
-
-- Go 1.21 or higher
-- PostgreSQL 12 or higher
-
-### Installation
-
-1. Clone the repository:
+### 1. Clone the Repository
 ```bash
 git clone <repository-url>
 cd bookwork-api
 ```
 
-2. Install dependencies:
+### 2. Install Dependencies
 ```bash
-go mod download
+make deps
 ```
 
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your database credentials and JWT secret
-```
+### 3. Database Setup
 
-4. Create and initialize the database:
+#### Option A: Local PostgreSQL Installation
 ```bash
+# Install PostgreSQL 15+
+brew install postgresql@15  # macOS
+# or
+sudo apt-get install postgresql-15  # Ubuntu
+
 # Create database
 createdb bookwork
-
-# Run the initialization script
-psql -d bookwork -f init.sql
 ```
 
-5. Run the application:
+#### Option B: Docker PostgreSQL
 ```bash
-go run cmd/api/main.go
+docker run --name bookwork-postgres \
+  -e POSTGRES_DB=bookwork \
+  -e POSTGRES_USER=bookwork \
+  -e POSTGRES_PASSWORD=your_password \
+  -p 5432:5432 \
+  -d postgres:15
 ```
 
-The API will be available at `http://localhost:8000/api`
+### 4. Environment Configuration
+Create `.env` file in the project root:
 
-## 🛠️ Common Commands
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=bookwork
+DB_PASSWORD=your_password
+DB_NAME=bookwork
+DB_SSLMODE=disable
 
+# Database Pool Settings (Production-ready defaults)
+DB_MAX_OPEN_CONNS=25
+DB_MAX_IDLE_CONNS=10
+DB_CONN_MAX_LIFETIME=300s
+DB_CONN_MAX_IDLE_TIME=900s
+
+# Optional: PgBouncer for connection pooling
+DB_PGBOUNCER_ADDR=localhost:6432
+
+# JWT Configuration
+JWT_SECRET_KEY=your-super-secret-jwt-key-change-this-in-production
+JWT_ISSUER=bookwork-api
+
+# Server Configuration
+SERVER_PORT=8000
+SERVER_HOST=localhost
+```
+
+### 5. Database Migration
 ```bash
-# View API logs (Docker)
-docker-compose -f docker-compose.staging.yml logs -f api-staging
+# Build migration tool and run all migrations
+make migrate-up
 
-# Restart API (Docker)
-docker-compose -f docker-compose.staging.yml restart api-staging
+# Check migration status
+make migrate-info
 
-# Stop everything (Docker)
-docker-compose -f docker-compose.staging.yml down
-
-# Access database
-psql -h localhost -p 5433 -U bookwork_staging -d bookwork_staging
+# View available migration commands
+make help | grep migrate
 ```
 
-## 🆘 Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| API not starting | Check `docker-compose logs` or local environment variables |
-| CORS errors | Verify `CORS_ORIGINS` includes your frontend URL |
-| Database connection failed | Ensure PostgreSQL is running and credentials are correct |
-| Tests failing | Run `./scripts/integration-test.sh` for detailed diagnostics |
-
-## 📚 What's Included
-
-✅ Complete Go API with all endpoints from specification  
-✅ PostgreSQL database with sample data  
-✅ JWT authentication system  
-✅ CORS configured for SvelteKit  
-✅ Docker containerization  
-✅ Integration test suite  
-✅ Health monitoring  
-
-## 🎯 Next Steps
-
-1. **Start Development**: Your API is ready for SvelteKit integration
-2. **Test Endpoints**: Use the integration test suite to verify functionality
-3. **Build Frontend**: Connect your SvelteKit app to `http://localhost:8001/api`
-4. **Deploy**: When ready, follow `STAGING_DEPLOYMENT_GUIDE.md` for cloud deployment
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `8000` |
-| `HOST` | Server host | `localhost` |
-| `DB_HOST` | Database host | `localhost` |
-| `DB_PORT` | Database port | `5432` |
-| `DB_USER` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | (required) |
-| `DB_NAME` | Database name | `bookwork` |
-| `DB_SSLMODE` | SSL mode | `disable` |
-| `JWT_SECRET` | JWT secret key | (required, min 32 chars) |
-| `JWT_ISSUER` | JWT issuer | `bookwork-api` |
-
-## API Endpoints
-
-### Authentication
-
-- `POST /api/auth/login` - User login
-- `POST /api/auth/refresh` - Refresh access token
-- `POST /api/auth/validate` - Validate token (protected)
-- `POST /api/auth/logout` - Logout (protected)
-
-### Club Management
-
-- `GET /api/club/{clubId}/members` - Get club members (protected)
-- `POST /api/club/{clubId}/members` - Add club member (protected)
-- `PUT /api/club/{clubId}/members/{memberId}` - Update member (protected)
-- `DELETE /api/club/{clubId}/members/{memberId}` - Remove member (protected)
-
-### Event Management
-
-- `GET /api/club/{clubId}/events` - Get club events (protected)
-- `POST /api/club/{clubId}/events` - Create event (protected)
-- `PUT /api/events/{eventId}` - Update event (protected)
-- `DELETE /api/events/{eventId}` - Delete event (protected)
-
-### Event Coordination
-
-- `GET /api/events/{eventId}/items` - Get event items (protected)
-- `POST /api/events/{eventId}/items` - Create event item (protected)
-- `PUT /api/events/{eventId}/items/{itemId}` - Update item (protected)
-- `DELETE /api/events/{eventId}/items/{itemId}` - Delete item (protected)
-
-### Availability Management
-
-- `GET /api/events/{eventId}/availability` - Get availability (protected)
-- `POST /api/events/{eventId}/availability` - Update availability (protected)
-
-### Health Check
-
-- `GET /healthz` - Health check endpoint
-
-## Project Structure
-
-```
-bookwork-api/
-├── cmd/
-│   └── api/
-│       └── main.go              # Application entry point
-├── internal/
-│   ├── auth/
-│   │   └── auth.go              # JWT authentication service
-│   ├── config/
-│   │   └── config.go            # Configuration management
-│   ├── database/
-│   │   └── database.go          # Database connection
-│   ├── handlers/
-│   │   ├── auth.go              # Authentication handlers
-│   │   ├── availability.go      # Availability handlers
-│   │   ├── club.go              # Club management handlers
-│   │   ├── event_items.go       # Event items handlers
-│   │   └── events.go            # Event management handlers
-│   └── models/
-│       └── models.go            # Data models and types
-├── init.sql                     # Database schema
-├── go.mod                       # Go module definition
-├── go.sum                       # Go module checksums
-├── .env.example                 # Environment variables template
-└── README.md                    # This file
-```
-
-## Testing
-
-### Default Admin User
-
-For testing purposes, a default admin user is created:
-- Email: `admin@bookwork.com`
-- Password: `admin123`
-- Role: `admin`
-
-### Sample API Requests
-
-#### Login
+### 6. Build and Run
 ```bash
-curl -X POST http://localhost:8000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@bookwork.com",
-    "password": "admin123"
-  }'
+# Build and run locally
+make run
+
+# Or run in development mode (with hot reload)
+make run-dev
 ```
 
-#### Validate Token
+## 📊 Database Management
+
+### Migration Commands
 ```bash
-curl -X POST http://localhost:8000/api/auth/validate \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+# Run all pending migrations
+make migrate-up
+
+# Rollback last migration
+make migrate-down
+
+# Migrate to specific version
+make migrate-to VERSION=003
+
+# Show current migration status
+make migrate-info
+
+# Fresh database (DESTRUCTIVE - for development only)
+make migrate-fresh
 ```
 
-## Security Features
+### Sample Data
+The migration system includes comprehensive sample data:
+- Default admin user (admin@bookwork.com / admin123)
+- Sample book club with members
+- Scheduled events and tasks
+- User activity examples
 
-- **Password Security**: Bcrypt hashing with salt
-- **JWT Security**: HS256 algorithm, configurable expiration
-- **SQL Injection Protection**: Parameterized queries
-- **Input Validation**: Server-side validation for all inputs
-- **Role-Based Access**: Owner, moderator, and member roles
-- **Token Management**: Refresh token rotation and revocation
+### Database Monitoring
+Access comprehensive monitoring endpoints:
 
-## Performance Optimizations
+- **Health Check**: `GET /api/health`
+- **Database Metrics**: `GET /api/metrics`
+- **Table Statistics**: `GET /api/metrics/tables`
+- **Slow Queries**: `GET /api/metrics/slow-queries?limit=20`
 
-- Database connection pooling
-- Proper database indexes
-- Query optimization
-- Response caching headers
-- Request timeouts
+## 🔧 Development
 
-## Production Deployment
+### Code Quality
+```bash
+# Format code
+make fmt
 
-1. Set secure environment variables:
-   - Use a strong JWT secret (min 32 characters)
-   - Enable SSL mode for database
-   - Set appropriate CORS origins
+# Run linting
+make lint
 
-2. Database optimizations:
-   - Use connection pooling
-   - Regular VACUUM and ANALYZE
-   - Monitor query performance
+# Run tests
+make test
 
-3. Security checklist:
-   - Use HTTPS in production
-   - Set secure CORS policies
-   - Implement rate limiting
-   - Monitor for suspicious activity
+# Generate test coverage report
+make test-coverage
+```
 
-## Contributing
+### Docker Development
+```bash
+# Build Docker image
+make docker-build
 
-1. Follow Go conventions and best practices
-2. Write tests for new features
-3. Update documentation for API changes
-4. Use descriptive commit messages
+# Run in container
+make docker-run
 
-## License
+# Full Docker Compose stack
+docker-compose up -d
+```
 
-This project is licensed under the MIT License.
+## 📈 Monitoring & Maintenance
+
+### Performance Monitoring
+The API includes built-in monitoring views:
+
+- **Database Health Summary**: Overall database status and performance
+- **Slow Query Analysis**: Identify performance bottlenecks
+- **Connection Monitoring**: Track database connection usage
+- **Index Usage Statistics**: Optimize database performance
+- **Lock Detection**: Identify and resolve database locks
+
+### Maintenance Functions
+Automated maintenance functions included:
+
+- **Token Cleanup**: Remove expired authentication tokens
+- **Health Metrics**: Calculate database performance metrics
+- **Performance Analysis**: Generate optimization recommendations
+
+### Production Deployment
+```bash
+# Build for production
+make build-linux
+
+# Setup staging environment
+make staging-setup
+
+# Run integration tests
+make test-integration
+```
+
+## 🔐 Security
+
+### Database Security
+- Row-level security policies
+- Audit logging for sensitive operations
+- Password policy enforcement
+- Connection encryption support
+
+### API Security
+- JWT authentication with refresh tokens
+- Rate limiting (configurable)
+- CORS protection
+- Security headers middleware
+
+## 📚 API Documentation
+
+### Authentication Endpoints
+```
+POST /api/auth/login      - User login
+POST /api/auth/refresh    - Token refresh
+POST /api/auth/logout     - User logout
+POST /api/auth/validate   - Token validation
+```
+
+### Monitoring Endpoints
+```
+GET  /api/health                    - API health status
+GET  /api/metrics                   - Complete database metrics
+GET  /api/metrics/tables            - Table statistics
+GET  /api/metrics/slow-queries      - Slow query analysis
+```
+
+### Core API Endpoints
+```
+GET  /api/club/{clubId}/members     - List club members
+POST /api/club/{clubId}/members     - Add club member
+GET  /api/club/{clubId}/events      - List club events
+POST /api/club/{clubId}/events      - Create new event
+```
+
+---

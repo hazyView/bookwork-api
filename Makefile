@@ -4,6 +4,7 @@
 APP_NAME=bookwork-api
 BUILD_DIR=bin
 MAIN_PATH=cmd/api/main.go
+MIGRATE_PATH=cmd/migrate/main.go
 DOCKER_COMPOSE_STAGING=docker-compose.staging.yml
 
 # Go settings
@@ -15,13 +16,13 @@ CGO_ENABLED?=0
 LDFLAGS=-ldflags "-s -w"
 BUILD_FLAGS=-a -installsuffix cgo
 
-.PHONY: help build clean test run docker-build docker-up docker-down staging-setup staging-test staging-stop deps fmt vet lint
+.PHONY: help build clean test run docker-build docker-up docker-down staging-setup staging-test staging-stop deps fmt vet lint migrate-build migrate-up migrate-down migrate-info migrate-to
 
 # Default target
 help: ## Show this help message
 	@echo "Bookwork API - Available Commands:"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Development
 deps: ## Install dependencies
@@ -47,6 +48,15 @@ build: deps fmt vet ## Build the application
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LDFLAGS) $(BUILD_FLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(APP_NAME)"
+
+migrate-build: deps ## Build migration tool
+	@echo "Building migration tool..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LDFLAGS) $(BUILD_FLAGS) -o $(BUILD_DIR)/migrate $(MIGRATE_PATH)
+	@echo "Migration tool build complete: $(BUILD_DIR)/migrate"
+
+build-all: build migrate-build ## Build application and migration tool
+
 build-linux: ## Build for Linux
 	@$(MAKE) build GOOS=linux GOARCH=amd64
 
@@ -56,7 +66,36 @@ build-mac: ## Build for macOS
 build-windows: ## Build for Windows
 	@$(MAKE) build GOOS=windows GOARCH=amd64
 
-clean: ## Clean build artifacts
+# Database Migration Commands
+migrate-up: migrate-build ## Run all pending migrations
+	@echo "Running database migrations..."
+	./$(BUILD_DIR)/migrate -up
+
+migrate-down: migrate-build ## Rollback last migration
+	@echo "Rolling back last migration..."
+	./$(BUILD_DIR)/migrate -down
+
+migrate-to: migrate-build ## Migrate to specific version (usage: make migrate-to VERSION=003)
+ifndef VERSION
+	@echo "Error: VERSION not specified. Usage: make migrate-to VERSION=003"
+	@exit 1
+endif
+	@echo "Migrating to version $(VERSION)..."
+	./$(BUILD_DIR)/migrate -to=$(VERSION)
+
+migrate-info: migrate-build ## Show migration status
+	@echo "Migration status:"
+	./$(BUILD_DIR)/migrate -info
+
+migrate-fresh: ## Drop all tables and run fresh migrations (DESTRUCTIVE)
+	@echo "WARNING: This will destroy all data!"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	@echo "Dropping all tables and running fresh migrations..."
+	@psql $(DATABASE_URL) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+	@$(MAKE) migrate-up
+
+# Cleaning
+clean: ## Clean build artifacts and Docker images
 	@echo "Cleaning..."
 	@rm -rf $(BUILD_DIR)
 	@docker system prune -f
@@ -89,12 +128,8 @@ test-coverage: ## Run tests with coverage
 	@echo "Coverage report generated: coverage.html"
 
 test-integration: ## Run integration tests
-	@echo "Running integration tests..."
-	@if [ -f ./scripts/integration-test.sh ]; then \
-		./scripts/integration-test.sh; \
-	else \
-		echo "Integration test script not found"; \
-	fi
+	@echo "Integration tests should be implemented with Go testing framework"
+	@echo "Use 'make test' for unit tests or implement integration tests with Go"
 
 # Docker Development
 docker-build: ## Build Docker image
@@ -108,28 +143,20 @@ docker-run: docker-build ## Run in Docker container
 # Staging Environment
 staging-setup: ## Setup staging environment with Docker
 	@echo "Setting up staging environment..."
-	@if [ -f ./scripts/setup-staging.sh ]; then \
-		./scripts/setup-staging.sh --docker; \
-	else \
-		echo "Staging setup script not found"; \
-		echo "Run: docker-compose -f $(DOCKER_COMPOSE_STAGING) up -d --build"; \
-	fi
+	@echo "Create .env file and run: docker-compose up -d"
+	@echo "Then run database migrations: make migrate-up"
 
-staging-setup-local: ## Setup staging environment locally
+staging-setup-local: ## Setup staging environment locally  
 	@echo "Setting up local staging environment..."
-	@if [ -f ./scripts/setup-staging.sh ]; then \
-		./scripts/setup-staging.sh; \
-	else \
-		echo "Staging setup script not found"; \
-	fi
+	@echo "1. Copy .env.example to .env and configure"
+	@echo "2. Start PostgreSQL database"
+	@echo "3. Run: make migrate-up"
+	@echo "4. Run: make run"
 
 staging-test: ## Test staging environment
 	@echo "Testing staging environment..."
-	@if [ -f ./scripts/integration-test.sh ]; then \
-		./scripts/integration-test.sh --api-url http://localhost:8001; \
-	else \
-		echo "Integration test script not found"; \
-	fi
+	@echo "Use curl to test endpoints:"
+	@echo "curl http://localhost:8000/api/health"
 
 staging-logs: ## View staging logs
 	docker-compose -f $(DOCKER_COMPOSE_STAGING) logs -f
@@ -181,24 +208,11 @@ init-db:
 		export DB_NAME=bookwork; \
 	fi; \
 	createdb $$DB_NAME 2>/dev/null || true; \
-	psql -d $$DB_NAME -f init.sql
+	psql -d $$DB_NAME -f internal/migrations/sql/*.sql
 	@echo "✅ Database initialized"
 
-# Format code
-fmt:
-	@echo "Formatting code..."
-	@go fmt ./...
-
-# Lint code (requires golangci-lint)
-lint:
-	@if command -v golangci-lint > /dev/null; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not found. Install it from https://golangci-lint.run/"; \
-	fi
-
 # Security check (requires gosec)
-security:
+security: ## Run security analysis
 	@if command -v gosec > /dev/null; then \
 		gosec ./...; \
 	else \
@@ -208,25 +222,15 @@ security:
 	fi
 
 # Generate API documentation (if using swag)
-docs:
+docs: ## Generate API documentation
 	@if command -v swag > /dev/null; then \
 		swag init -g cmd/api/main.go; \
 	else \
 		echo "swag not found. Install it with: go install github.com/swaggo/swag/cmd/swag@latest"; \
 	fi
 
-# Docker build
-docker-build:
-	@echo "Building Docker image..."
-	@docker build -t bookwork-api .
-
-# Docker run
-docker-run:
-	@echo "Running Docker container..."
-	@docker run -p 8000:8000 --env-file .env bookwork-api
-
 # Check dependencies for vulnerabilities
-vuln-check:
+vuln-check: ## Check for security vulnerabilities
 	@if command -v govulncheck > /dev/null; then \
 		govulncheck ./...; \
 	else \

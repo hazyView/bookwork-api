@@ -10,6 +10,7 @@ import (
 	"bookwork-api/internal/database"
 	"bookwork-api/internal/handlers"
 	customMiddleware "bookwork-api/internal/middleware"
+	"bookwork-api/internal/migrations"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -25,17 +26,29 @@ func main() {
 
 	// Connect to database
 	db, err := database.New(database.Config{
-		Host:     cfg.Database.Host,
-		Port:     cfg.Database.Port,
-		User:     cfg.Database.User,
-		Password: cfg.Database.Password,
-		Database: cfg.Database.Database,
-		SSLMode:  cfg.Database.SSLMode,
+		Host:            cfg.Database.Host,
+		Port:            cfg.Database.Port,
+		User:            cfg.Database.User,
+		Password:        cfg.Database.Password,
+		Database:        cfg.Database.Database,
+		SSLMode:         cfg.Database.SSLMode,
+		MaxOpenConns:    cfg.Database.MaxOpenConns,
+		MaxIdleConns:    cfg.Database.MaxIdleConns,
+		ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
+		ConnMaxIdleTime: cfg.Database.ConnMaxIdleTime,
+		PgBouncerAddr:   cfg.Database.PgBouncerAddr,
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Run database migrations
+	migrator := migrations.NewMigrator(db.DB)
+	if err := migrator.RunMigrations(); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+	log.Println("Database migrations completed successfully")
 
 	// Initialize auth service
 	authService := auth.NewService(cfg.JWT.SecretKey, cfg.JWT.Issuer)
@@ -46,6 +59,7 @@ func main() {
 	eventHandler := handlers.NewEventHandler(db)
 	eventItemHandler := handlers.NewEventItemHandler(db)
 	availabilityHandler := handlers.NewAvailabilityHandler(db)
+	healthHandler := handlers.NewHealthHandler(db.DB)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -75,6 +89,9 @@ func main() {
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
+		// Health and monitoring routes (no auth required)
+		r.Mount("/", healthHandler.RegisterRoutes())
+
 		// Public authentication routes
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/login", authHandler.Login)
