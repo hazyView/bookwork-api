@@ -131,6 +131,15 @@ test-integration: ## Run integration tests
 	@echo "Integration tests should be implemented with Go testing framework"
 	@echo "Use 'make test' for unit tests or implement integration tests with Go"
 
+# Utility Commands
+generate-hash: ## Generate password hash (usage: make generate-hash)
+	@echo "Generating password hash..."
+	@go run ./cmd/hash-generator
+
+update-password: ## Update admin password in database
+	@echo "Updating admin password..."
+	@go run ./cmd/password-updater
+
 # Docker Development
 docker-build: ## Build Docker image
 	@echo "Building Docker image..."

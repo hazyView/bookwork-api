@@ -64,8 +64,14 @@ func main() {
 	// Setup router
 	r := chi.NewRouter()
 
-	// Security middleware
-	r.Use(customMiddleware.SecurityHeaders)
+	// Security middleware with configuration
+	r.Use(customMiddleware.SecurityHeadersWithConfig(
+		customMiddleware.SecurityConfig{
+			EnableHSTS:      cfg.Security.EnableHSTS,
+			HSTSMaxAge:      cfg.Security.HSTSMaxAge,
+			EnableHTTPSOnly: cfg.Security.EnableHTTPSOnly,
+		},
+	))
 
 	// Rate limiting (100 requests per minute)
 	rateLimiter := customMiddleware.NewRateLimiter(100, time.Minute)
@@ -77,14 +83,14 @@ func main() {
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(middleware.Heartbeat("/healthz"))
 
-	// CORS
+	// CORS configuration
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"}, // SvelteKit dev server
+		AllowedOrigins:   cfg.CORS.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
-		MaxAge:           300,
+		AllowCredentials: cfg.CORS.AllowCredentials,
+		MaxAge:           cfg.CORS.MaxAge,
 	}))
 
 	// API routes

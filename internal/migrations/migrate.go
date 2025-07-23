@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -59,7 +60,7 @@ func (m *Migrator) RunMigrations() error {
 			if err := m.applyMigration(migration); err != nil {
 				return fmt.Errorf("failed to apply migration %d: %w", migration.Version, err)
 			}
-			fmt.Printf("Applied migration %03d_%s\n", migration.Version, migration.Name)
+			log.Printf("Applied migration %03d_%s", migration.Version, migration.Name)
 		}
 	}
 
@@ -87,9 +88,9 @@ func (m *Migrator) RollbackMigration() error {
 		return fmt.Errorf("failed to remove migration record: %w", err)
 	}
 
-	fmt.Printf("Rolled back migration %03d\n", lastVersion)
-	fmt.Println("WARNING: Schema changes were not automatically reversed.")
-	fmt.Println("Manual rollback may be required for data integrity.")
+	log.Printf("Rolled back migration %03d", lastVersion)
+	log.Println("WARNING: Schema changes were not automatically reversed.")
+	log.Println("Manual rollback may be required for data integrity.")
 
 	return nil
 }
@@ -136,7 +137,7 @@ func (m *Migrator) MigrateTo(targetVersion int) error {
 			if err := m.applyMigration(migration); err != nil {
 				return fmt.Errorf("failed to apply migration %d: %w", migration.Version, err)
 			}
-			fmt.Printf("Applied migration %03d_%s\n", migration.Version, migration.Name)
+			log.Printf("Applied migration %03d_%s", migration.Version, migration.Name)
 		}
 	}
 

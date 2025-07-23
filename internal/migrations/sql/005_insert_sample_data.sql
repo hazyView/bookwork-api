@@ -12,16 +12,16 @@ INSERT INTO users (
     '00000000-0000-0000-0000-000000000001',
     'System Administrator',
     'admin@bookwork.com',
-    '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa',
+    '$2a$10$2Yrl7Of7T1Zk/zfi0ZhWeO1hkq92fhoEdrsyrSmvH1VfqoHfLPaCu',
     'admin',
     true
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Insert sample users for testing
 INSERT INTO users (name, email, password_hash, role) VALUES 
-    ('Jane Smith', 'jane.smith@example.com', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'member'),
-    ('Bob Johnson', 'bob.johnson@example.com', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'member'),
-    ('Alice Wilson', 'alice.wilson@example.com', '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa', 'moderator')
+    ('Jane Smith', 'jane.smith@example.com', '$2a$10$2Yrl7Of7T1Zk/zfi0ZhWeO1hkq92fhoEdrsyrSmvH1VfqoHfLPaCu', 'member'),
+    ('Bob Johnson', 'bob.johnson@example.com', '$2a$10$2Yrl7Of7T1Zk/zfi0ZhWeO1hkq92fhoEdrsyrSmvH1VfqoHfLPaCu', 'member'),
+    ('Alice Wilson', 'alice.wilson@example.com', '$2a$10$2Yrl7Of7T1Zk/zfi0ZhWeO1hkq92fhoEdrsyrSmvH1VfqoHfLPaCu', 'moderator')
 ON CONFLICT (email) DO NOTHING;
 
 -- Create sample book club
@@ -49,7 +49,7 @@ INSERT INTO clubs (
 DO $$
 DECLARE
     user_rec RECORD;
-    club_id UUID := '00000000-0000-0000-0000-000000000001';
+    target_club_id UUID := '00000000-0000-0000-0000-000000000001';
 BEGIN
     -- Add all sample users to the club with different roles
     FOR user_rec IN 
@@ -58,7 +58,7 @@ BEGIN
     LOOP
         INSERT INTO club_members (club_id, user_id, role, books_read) 
         VALUES (
-            club_id, 
+            target_club_id, 
             user_rec.id, 
             CASE 
                 WHEN user_rec.email = 'alice.wilson@example.com' THEN 'moderator'
@@ -76,7 +76,7 @@ END $$;
 -- Create sample events
 DO $$
 DECLARE
-    club_id UUID := '00000000-0000-0000-0000-000000000001';
+    target_club_id UUID := '00000000-0000-0000-0000-000000000001';
     admin_id UUID := '00000000-0000-0000-0000-000000000001';
     event1_id UUID;
     event2_id UUID;
@@ -86,7 +86,7 @@ BEGIN
         club_id, title, description, event_date, event_time, location, 
         book, type, created_by
     ) VALUES (
-        club_id,
+        target_club_id,
         'Discussion: Pride and Prejudice',
         'Join us for an engaging discussion about Jane Austen''s timeless classic. We''ll explore themes of love, class, and social expectations in 19th century England.',
         CURRENT_DATE + INTERVAL '2 weeks',
@@ -102,7 +102,7 @@ BEGIN
         club_id, title, description, event_date, event_time, location, 
         book, type, created_by
     ) VALUES (
-        club_id,
+        target_club_id,
         'Book Selection Meeting',
         'Help us choose our next book! We''ll review member suggestions and vote on our upcoming reads for the next quarter.',
         CURRENT_DATE + INTERVAL '1 month',

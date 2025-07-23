@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -261,8 +263,12 @@ func (h *AuthHandler) getUserByID(ctx context.Context, userID uuid.UUID) (*model
 }
 
 func (h *AuthHandler) storeRefreshToken(ctx context.Context, userID uuid.UUID, token string) error {
-	// Hash the token before storing
-	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
+	// Hash the token using SHA-256 first to avoid bcrypt 72-byte limit
+	sha := sha256.Sum256([]byte(token))
+	tokenHash := hex.EncodeToString(sha[:])
+
+	// Then bcrypt the SHA-256 hash for secure storage
+	hashedToken, err := bcrypt.GenerateFromPassword([]byte(tokenHash), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -276,6 +282,10 @@ func (h *AuthHandler) storeRefreshToken(ctx context.Context, userID uuid.UUID, t
 }
 
 func (h *AuthHandler) isRefreshTokenValid(ctx context.Context, userID uuid.UUID, token string) (bool, error) {
+	// Hash the token using SHA-256 first to match storage format
+	sha := sha256.Sum256([]byte(token))
+	tokenHash := hex.EncodeToString(sha[:])
+
 	query := `
 		SELECT token_hash 
 		FROM refresh_tokens 
@@ -293,7 +303,8 @@ func (h *AuthHandler) isRefreshTokenValid(ctx context.Context, userID uuid.UUID,
 			continue
 		}
 
-		if bcrypt.CompareHashAndPassword([]byte(hashedToken), []byte(token)) == nil {
+		// Compare the SHA-256 hash with the stored bcrypt hash
+		if bcrypt.CompareHashAndPassword([]byte(hashedToken), []byte(tokenHash)) == nil {
 			return true, nil
 		}
 	}
@@ -331,13 +342,6 @@ func (h *AuthHandler) writeErrorResponse(w http.ResponseWriter, statusCode int, 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := &models.FrontendErrorResponse{
-		Error:      code,
-		Message:    message,
-		StatusCode: statusCode,
-		Details:    details,
-		Timestamp:  time.Now().UTC().Format(time.RFC3339),
-	}
-
+	response := models.NewErrorResponse(code, message, details)
 	json.NewEncoder(w).Encode(response)
 }

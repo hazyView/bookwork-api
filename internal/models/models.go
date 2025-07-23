@@ -261,6 +261,7 @@ type Pagination struct {
 	TotalPages int `json:"totalPages"`
 }
 
+// Standard API Response structures
 type APIResponse struct {
 	Success   bool        `json:"success"`
 	Data      interface{} `json:"data,omitempty"`
@@ -272,7 +273,17 @@ type APIResponse struct {
 type APIError struct {
 	Code    string                 `json:"code"`
 	Message string                 `json:"message"`
-	Details map[string]interface{} `json:"details"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+// Standard Error Response structure (matches frontend expectations)
+type ErrorResponse struct {
+	Error     string                 `json:"error"`
+	Code      string                 `json:"code"`
+	Message   string                 `json:"message"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	Success   bool                   `json:"success"`
 }
 
 func NewAPIResponse(success bool, data interface{}, message string) *APIResponse {
@@ -284,7 +295,18 @@ func NewAPIResponse(success bool, data interface{}, message string) *APIResponse
 	}
 }
 
-func NewErrorResponse(code, message string, details map[string]interface{}) *APIResponse {
+func NewErrorResponse(code, message string, details map[string]interface{}) *ErrorResponse {
+	return &ErrorResponse{
+		Error:     message,
+		Code:      code,
+		Message:   message,
+		Details:   details,
+		Timestamp: time.Now().UTC(),
+		Success:   false,
+	}
+}
+
+func NewAPIErrorResponse(code, message string, details map[string]interface{}) *APIResponse {
 	return &APIResponse{
 		Success: false,
 		Error: &APIError{
@@ -314,6 +336,7 @@ type FrontendRefreshResponse struct {
 // FrontendErrorResponse matches the frontend error handling format
 type FrontendErrorResponse struct {
 	Error      string      `json:"error"`
+	Code       string      `json:"code"`
 	Message    string      `json:"message"`
 	StatusCode int         `json:"statusCode"`
 	Details    interface{} `json:"details,omitempty"`
