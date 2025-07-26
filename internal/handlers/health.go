@@ -134,12 +134,18 @@ func (h *HealthHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// Check if database is actually accessible
-	if err := h.db.Ping(); err != nil {
-		healthCheck.Status = "unhealthy"
-		healthCheck.Database.Status = "unhealthy"
-		healthCheck.Services["database"] = "unhealthy"
-		w.WriteHeader(http.StatusServiceUnavailable)
+	// Check if database is actually accessible (skip for mock mode)
+	if h.db != nil {
+		if err := h.db.Ping(); err != nil {
+			healthCheck.Status = "unhealthy"
+			healthCheck.Database.Status = "unhealthy"
+			healthCheck.Services["database"] = "unhealthy"
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	} else {
+		// Mock mode - database is always healthy
+		healthCheck.Database.Status = "mock"
+		healthCheck.Services["database"] = "mock"
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -183,6 +189,20 @@ func (h *HealthHandler) SlowQueries(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HealthHandler) getDatabaseHealth() DatabaseHealth {
+	if h.db == nil {
+		// Mock mode
+		return DatabaseHealth{
+			Status:          "mock",
+			OpenConnections: 0,
+			MaxConnections:  0,
+			IdleConnections: 0,
+			WaitCount:       0,
+			WaitDuration:    "0s",
+			MaxIdleTime:     "N/A",
+			MaxLifetime:     "N/A",
+		}
+	}
+
 	stats := h.db.Stats()
 
 	return DatabaseHealth{

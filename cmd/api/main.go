@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"bookwork-api/internal/auth"
@@ -24,30 +25,42 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Connect to database
-	db, err := database.New(database.Config{
-		Host:            cfg.Database.Host,
-		Port:            cfg.Database.Port,
-		User:            cfg.Database.User,
-		Password:        cfg.Database.Password,
-		Database:        cfg.Database.Database,
-		SSLMode:         cfg.Database.SSLMode,
-		MaxOpenConns:    cfg.Database.MaxOpenConns,
-		MaxIdleConns:    cfg.Database.MaxIdleConns,
-		ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
-		ConnMaxIdleTime: cfg.Database.ConnMaxIdleTime,
-		PgBouncerAddr:   cfg.Database.PgBouncerAddr,
-	})
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+	// Initialize database based on environment variable
+	var db *database.DB
+	isMockMode := os.Getenv("BOOKWORK_API_MOCK_DATA") == "true"
+
+	if isMockMode {
+		log.Println("INFO: Initializing with MOCK data store")
+		db = database.NewMock()
+	} else {
+		log.Println("INFO: Initializing with PostgreSQL data store")
+		// Your existing logic to connect to PostgreSQL
+		realDB, err := database.New(database.Config{
+			Host:            cfg.Database.Host,
+			Port:            cfg.Database.Port,
+			User:            cfg.Database.User,
+			Password:        cfg.Database.Password,
+			Database:        cfg.Database.Database,
+			SSLMode:         cfg.Database.SSLMode,
+			MaxOpenConns:    cfg.Database.MaxOpenConns,
+			MaxIdleConns:    cfg.Database.MaxIdleConns,
+			ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
+			ConnMaxIdleTime: cfg.Database.ConnMaxIdleTime,
+			PgBouncerAddr:   cfg.Database.PgBouncerAddr,
+		})
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		db = realDB
+
+		// Run database migrations for real database only
+		migrator := migrations.NewMigrator(realDB.DB)
+		if err := migrator.RunMigrations(); err != nil {
+			log.Fatalf("Failed to run migrations: %v", err)
+		}
+		log.Println("Database migrations completed successfully")
 	}
 	defer db.Close()
-
-	// Run database migrations
-	migrator := migrations.NewMigrator(db.DB)
-	if err := migrator.RunMigrations(); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
-	}
 	log.Println("Database migrations completed successfully")
 
 	// Initialize auth service
@@ -59,7 +72,14 @@ func main() {
 	eventHandler := handlers.NewEventHandler(db)
 	eventItemHandler := handlers.NewEventItemHandler(db)
 	availabilityHandler := handlers.NewAvailabilityHandler(db)
-	healthHandler := handlers.NewHealthHandler(db.DB)
+
+	// Create health handler - pass nil for mock mode since db.DB will be nil
+	var healthHandler *handlers.HealthHandler
+	if isMockMode {
+		healthHandler = handlers.NewHealthHandler(nil)
+	} else {
+		healthHandler = handlers.NewHealthHandler(db.DB)
+	}
 
 	// Setup router
 	r := chi.NewRouter()
@@ -153,6 +173,13 @@ func main() {
 
 	// Health check endpoint
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
+	})
+
+	//Cloud run health check
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"healthy","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))

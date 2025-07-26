@@ -28,6 +28,14 @@ type Config struct {
 	PgBouncerAddr   string
 }
 
+// NewMock creates a mock database for testing and demos
+func NewMock() *DB {
+	// Create a mock database that has the same interface
+	return &DB{
+		DB: nil, // No real sql.DB connection
+	}
+}
+
 func New(config Config) (*DB, error) {
 	var dsn string
 
@@ -74,15 +82,56 @@ func New(config Config) (*DB, error) {
 }
 
 func (db *DB) Close() error {
-	return db.DB.Close()
+	if db.DB != nil {
+		return db.DB.Close()
+	}
+	return nil // Mock case
 }
 
 func (db *DB) Ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return db.PingContext(ctx)
+	if db.DB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return db.PingContext(ctx)
+	}
+	return nil // Mock case - always healthy
 }
 
 func (db *DB) BeginTx(ctx context.Context) (*sql.Tx, error) {
-	return db.DB.BeginTx(ctx, nil)
+	if db.DB != nil {
+		return db.DB.BeginTx(ctx, nil)
+	}
+	return &sql.Tx{}, nil // Mock case
 }
+
+// QueryRowContext with mock support
+func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	if db.DB != nil {
+		return db.DB.QueryRowContext(ctx, query, args...)
+	}
+	// Mock case - return empty row (handlers will need to handle this)
+	return &sql.Row{}
+}
+
+// QueryContext with mock support
+func (db *DB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	if db.DB != nil {
+		return db.DB.QueryContext(ctx, query, args...)
+	}
+	// Mock case
+	return &sql.Rows{}, nil
+}
+
+// ExecContext with mock support
+func (db *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	if db.DB != nil {
+		return db.DB.ExecContext(ctx, query, args...)
+	}
+	// Mock case
+	return &mockResult{}, nil
+}
+
+type mockResult struct{}
+
+func (m *mockResult) LastInsertId() (int64, error) { return 1, nil }
+func (m *mockResult) RowsAffected() (int64, error) { return 1, nil }
