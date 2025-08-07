@@ -1,0 +1,73 @@
+name: Build and Deploy API
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+  GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+  GITOPS_REPO: hazyView/bookwork-gitops
+  IMAGE_NAME: bookwork-api
+  IMAGE_REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout App Repo
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          audience: 'https://iam.googleapis.com/projects/166623251454/locations/global/workloadIdentityPools/github-actions-pool'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.IMAGE_REGISTRY }}
+
+      - name: Build and Push Docker Image
+        id: build-image
+        run: |
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          IMAGE_FQN="${{ env.IMAGE_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/bookwork-registry/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          docker build -t $IMAGE_FQN .
+          docker push $IMAGE_FQN
+          echo "IMAGE_FQN=$IMAGE_FQN" >> $GITHUB_OUTPUT
+
+      - name: Checkout GitOps Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GIT_OPS_PAT }}
+          path: gitops
+
+      - name: Update Image Tag in GitOps Repo
+        env:
+          IMAGE_FQN: ${{ steps.build-image.outputs.IMAGE_FQN }}
+        run: |
+          IMAGE_TAG=$(echo $IMAGE_FQN | cut -d':' -f2)
+          cd gitops/tenants/bookwork/base
+          # This command targets the symbolic name "bookwork-api"
+          kustomize edit set image bookwork-api=$IMAGE_FQN
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions-bot@github.com"
+          git add kustomization.yaml
+          # Commit only if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "ci: Update ${{ env.IMAGE_NAME }} to tag $IMAGE_TAG"
+            git push
+          else
+            echo "No changes to commit."
+          fi
